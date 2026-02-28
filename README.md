@@ -10,6 +10,12 @@ Current focus:
 - compare candidate output against `demo.exe`
 - keep all intermediate artifacts in a per-run workspace
 
+Current validated status:
+
+- real Windows end-to-end execution has been verified for `5-b15.cpp`
+- `get_input_data.exe`, `demo.exe`, `txt_compare.exe`, and `codex exec --output-schema` were exercised successfully
+- the latest passing sample run is `workspaces/000008`
+
 ## What exists in this version
 
 - workspace creation with persistent artifacts
@@ -21,6 +27,8 @@ Current focus:
 - compile, run, compare loop with retry feedback
 - basic hard-constraint and style checks
 - post-pass humanization step with regression test
+- pre-solver demo observation capture for format inference
+- Windows-local output encoding alignment for Chinese console text
 
 ## Current limits
 
@@ -28,6 +36,7 @@ Current focus:
 - multiple generated `.cpp` files are compiled together as one program
 - if a question actually requires multiple independent programs, run separate jobs
 - hard constraints are partly inferred from problem text and partly configurable via CLI flags
+- current validation is strongest for single-subproblem runs with provided grouped test data
 
 ## Usage
 
@@ -80,3 +89,9 @@ Then run:
 ```bash
 python main.py run --problem problem.pdf --demo demo.exe --data hw_data.txt
 ```
+
+## Next steps
+
+- validate another subproblem such as `5-b16.cpp`
+- install `pdftotext` on the Windows machine and re-check extraction quality
+- improve hard-constraint inference for banned syntax and per-subproblem exceptions

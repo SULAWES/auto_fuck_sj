@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import locale
 import re
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -24,12 +26,14 @@ class AutomaticGC:
         self.problem_text = ""
         self.problem_context_path = self.workspace.extracted_dir / "problem_context.md"
         self.constraint_hints_path = self.workspace.extracted_dir / "constraint_hints.json"
+        self.demo_observations_path = self.workspace.testcases_dir / "demo_observations.json"
         self.run_manifest_path = self.workspace.root / "run_manifest.json"
 
     def run(self) -> dict[str, Any]:
         self._write_run_manifest()
         self.problem_text = self._ingest_problem()
         testcases = self._build_testcases()
+        self._write_demo_observations(testcases)
 
         feedback_items: list[str] = []
         best_attempt_dir: Path | None = None
@@ -338,6 +342,33 @@ class AutomaticGC:
         )
         return generated_cases
 
+    def _write_demo_observations(self, testcases: list[TestCase]) -> None:
+        preferred_cases = [case for case in testcases if case.source == "provided_data"]
+        selected_cases = preferred_cases[:5] if preferred_cases else testcases[:3]
+
+        observations: list[dict[str, Any]] = []
+        demo_path = self.workspace.input_dir / self.request.demo_exe.name
+        for testcase in selected_cases:
+            demo_result = run_command(
+                [str(demo_path)],
+                cwd=self.workspace.root,
+                input_text=testcase.input_text,
+                timeout_sec=self.tools.run_timeout_sec,
+            )
+            observations.append(
+                {
+                    "name": testcase.name,
+                    "source": testcase.source,
+                    "input_text": testcase.input_text,
+                    "demo_stdout": demo_result.stdout,
+                    "demo_stderr": demo_result.stderr,
+                    "returncode": demo_result.returncode,
+                    "timed_out": demo_result.timed_out,
+                }
+            )
+
+        self.workspace.write_json(self.demo_observations_path, observations)
+
     def _run_solver(self, *, attempt: int, feedback_items: list[str]) -> tuple[dict[str, str], dict]:
         file_enum = [target.filename for target in self.request.submission_targets]
         file_schema = {
@@ -369,6 +400,9 @@ class AutomaticGC:
             problem_context_path=str(self.problem_context_path.relative_to(self.workspace.root)),
             testcase_path=str(
                 (self.workspace.testcases_dir / "merged_cases.json").relative_to(self.workspace.root)
+            ),
+            demo_observations_path=str(
+                self.demo_observations_path.relative_to(self.workspace.root)
             ),
             required_cpp_names="\n".join(f"- {name}" for name in file_enum),
             attempt_number=str(attempt),
@@ -413,6 +447,8 @@ class AutomaticGC:
         compile_command = [
             self.tools.gpp_bin,
             "-std=c++17",
+            "-finput-charset=UTF-8",
+            "-fexec-charset=GBK",
             "-O2",
             "-Wall",
             "-Wextra",
@@ -458,41 +494,44 @@ class AutomaticGC:
 
             input_path.write_text(testcase.input_text, encoding="utf-8")
 
-            demo_result = run_command(
+            demo_result = self._run_binary_command(
                 [str(self.workspace.input_dir / self.request.demo_exe.name)],
                 cwd=case_dir,
                 input_text=testcase.input_text,
                 timeout_sec=self.tools.run_timeout_sec,
             )
-            expected_path.write_text(demo_result.stdout, encoding="utf-8")
-            demo_stderr_path.write_text(demo_result.stderr, encoding="utf-8")
-            if demo_result.returncode != 0:
+            expected_path.write_bytes(demo_result["stdout_bytes"])
+            demo_stderr_path.write_text(demo_result["stderr_text"], encoding="utf-8")
+            if demo_result["returncode"] != 0:
                 failures.append(
                     EvaluationFailure(
                         case_name=testcase.name,
                         reason="demo.exe failed",
-                        compare_stdout=demo_result.stdout,
-                        compare_stderr=demo_result.stderr,
+                        compare_stdout=demo_result["stdout_text"],
+                        compare_stderr=demo_result["stderr_text"],
                         expected_file=str(expected_path),
                     )
                 )
                 continue
 
-            candidate_result = run_command(
+            candidate_result = self._run_binary_command(
                 [str(executable_path)],
                 cwd=case_dir,
                 input_text=testcase.input_text,
                 timeout_sec=self.tools.run_timeout_sec,
             )
-            actual_path.write_text(candidate_result.stdout, encoding="utf-8")
-            candidate_stderr_path.write_text(candidate_result.stderr, encoding="utf-8")
-            if candidate_result.returncode != 0:
+            actual_path.write_bytes(candidate_result["stdout_bytes"])
+            candidate_stderr_path.write_text(
+                candidate_result["stderr_text"],
+                encoding="utf-8",
+            )
+            if candidate_result["returncode"] != 0:
                 failures.append(
                     EvaluationFailure(
                         case_name=testcase.name,
                         reason="candidate program failed",
-                        compare_stdout=candidate_result.stdout,
-                        compare_stderr=candidate_result.stderr,
+                        compare_stdout=candidate_result["stdout_text"],
+                        compare_stderr=candidate_result["stderr_text"],
                         expected_file=str(expected_path),
                         actual_file=str(actual_path),
                     )
@@ -665,3 +704,47 @@ class AutomaticGC:
     def _safe_case_name(self, name: str) -> str:
         cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
         return cleaned or "case"
+
+    def _run_binary_command(
+        self,
+        command: list[str],
+        *,
+        cwd: Path,
+        input_text: str,
+        timeout_sec: int,
+    ) -> dict[str, Any]:
+        encoding = locale.getpreferredencoding(False) or "utf-8"
+        input_bytes = input_text.encode(encoding, errors="replace")
+
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=str(cwd),
+                input=input_bytes,
+                capture_output=True,
+                text=False,
+                timeout=timeout_sec,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout_bytes = exc.stdout or b""
+            stderr_bytes = exc.stderr or b""
+            return {
+                "returncode": -1,
+                "stdout_bytes": stdout_bytes,
+                "stderr_bytes": stderr_bytes,
+                "stdout_text": stdout_bytes.decode(encoding, errors="replace"),
+                "stderr_text": stderr_bytes.decode(encoding, errors="replace"),
+                "timed_out": True,
+            }
+
+        stdout_bytes = completed.stdout or b""
+        stderr_bytes = completed.stderr or b""
+        return {
+            "returncode": completed.returncode,
+            "stdout_bytes": stdout_bytes,
+            "stderr_bytes": stderr_bytes,
+            "stdout_text": stdout_bytes.decode(encoding, errors="replace"),
+            "stderr_text": stderr_bytes.decode(encoding, errors="replace"),
+            "timed_out": False,
+        }

@@ -63,7 +63,13 @@ class CodexAdapter:
         if self.tools.codex_model:
             command.extend(["-m", self.tools.codex_model])
 
-        result = run_command(command, cwd=workdir, input_text=prompt, timeout_sec=300)
+        result = run_command(
+            command,
+            cwd=workdir,
+            input_text=prompt,
+            timeout_sec=300,
+            encoding="utf-8",
+        )
         stdout_path.write_text(result.stdout, encoding="utf-8")
         stderr_path.write_text(result.stderr, encoding="utf-8")
 

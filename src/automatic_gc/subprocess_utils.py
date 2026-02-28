@@ -13,8 +13,9 @@ def run_command(
     cwd: Path | None = None,
     input_text: str | None = None,
     timeout_sec: int | None = None,
+    encoding: str | None = None,
 ) -> CommandResult:
-    encoding = locale.getpreferredencoding(False) or "utf-8"
+    resolved_encoding = encoding or locale.getpreferredencoding(False) or "utf-8"
     try:
         completed = subprocess.run(
             command,
@@ -22,7 +23,7 @@ def run_command(
             input=input_text,
             capture_output=True,
             text=True,
-            encoding=encoding,
+            encoding=resolved_encoding,
             errors="replace",
             timeout=timeout_sec,
             check=False,

@@ -4,6 +4,7 @@ Read these workspace files first:
 
 - $problem_context_path
 - $testcase_path
+- $demo_observations_path
 
 Task constraints:
 
@@ -11,6 +12,8 @@ Task constraints:
 - Generate exactly these source files:
 $required_cpp_names
 - Keep the code correct before trying to optimize style.
+- Match the demo program's visible output format exactly when the observations make it clear.
+- Use the demo observations to infer prompt text, line breaks, and whether consumed newline characters affect the required counts.
 - The code should look like a solid computer science student's coursework submission.
 - Do not make it look industrial or overly engineered.
 - Do not use meaningless variable names like a, b, c, d for core logic variables.
