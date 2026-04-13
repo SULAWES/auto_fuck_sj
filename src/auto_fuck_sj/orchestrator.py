@@ -8,8 +8,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from .ai_adapter import AIAdapter
 from .codex_adapter import CodexAdapter
 from .constraints import check_constraints
+from .kimi_adapter import KimiAdapter
 from .models import EvaluationFailure, EvaluationSummary, RunRequest, TestCase, ToolConfig
 from .subprocess_utils import run_command
 from .testcase_parser import parse_grouped_test_data
@@ -22,12 +24,22 @@ class AutomaticGC:
         self.request = request
         self.tools = tools
         self.workspace = Workspace.create(request.workspace_root)
-        self.agent = CodexAdapter(tools, self.workspace)
+        self.agent = self._create_ai_adapter()
         self.problem_text = ""
         self.problem_context_path = self.workspace.extracted_dir / "problem_context.md"
         self.constraint_hints_path = self.workspace.extracted_dir / "constraint_hints.json"
         self.demo_observations_path = self.workspace.testcases_dir / "demo_observations.json"
         self.run_manifest_path = self.workspace.root / "run_manifest.json"
+    
+    def _create_ai_adapter(self) -> AIAdapter:
+        """根据配置创建对应的 AI 适配器。"""
+        backend = self.tools.ai_backend.lower()
+        if backend == "kimi":
+            return KimiAdapter(self.tools, self.workspace)
+        elif backend == "codex":
+            return CodexAdapter(self.tools, self.workspace)
+        else:
+            raise ValueError(f"Unsupported AI backend: {backend}. Use 'codex' or 'kimi'.")
 
     def run(self) -> dict[str, Any]:
         self._write_run_manifest()
@@ -128,12 +140,14 @@ class AutomaticGC:
         manifest = {
             "problem_file": str(self.request.problem_file),
             "demo_exe": str(self.request.demo_exe),
+            "demo_args": list(self.request.demo_args),
             "data_file": str(self.request.data_file) if self.request.data_file else None,
             "submission_targets": [item.filename for item in self.request.submission_targets],
             "entry_cpp": self.request.normalized_entry_cpp(),
             "max_attempts": self.request.max_attempts,
             "generated_cases": self.request.generated_cases,
             "extra_banned_tokens": self.request.extra_banned_tokens,
+            "testcase_prefixes": self.request.testcase_prefixes(),
         }
         self.workspace.write_json(self.run_manifest_path, manifest)
 
@@ -152,12 +166,14 @@ class AutomaticGC:
         submission_text = "\n".join(
             f"- {target.filename}" for target in self.request.submission_targets
         )
+        demo_args_text = " ".join(self.request.demo_args) if self.request.demo_args else "(none)"
         context = "\n".join(
             [
                 "# Problem Context",
                 "",
                 f"- Original problem file: `{input_problem.name}`",
                 f"- Demo executable: `{input_demo.name}`",
+                f"- Demo arguments: `{demo_args_text}`",
                 f"- Expected source files:",
                 submission_text,
                 "",
@@ -214,8 +230,20 @@ class AutomaticGC:
         return merged_cases
 
     def _load_provided_cases(self) -> list[TestCase]:
+        selection_path = self.workspace.testcases_dir / "provided_cases_selection.json"
         if not self.request.data_file:
             self.workspace.write_json(self.workspace.testcases_dir / "provided_cases.json", [])
+            self.workspace.write_json(
+                selection_path,
+                {
+                    "requested_prefixes": self.request.testcase_prefixes(),
+                    "raw_count": 0,
+                    "selected_count": 0,
+                    "used_filtered_selection": False,
+                    "selected_case_names": [],
+                    "skipped_case_names": [],
+                },
+            )
             return []
 
         data_path = self.workspace.input_dir / self.request.data_file.name
@@ -233,7 +261,7 @@ class AutomaticGC:
             cwd=self.workspace.root,
             timeout_sec=20,
         )
-        provided_cases: list[TestCase] = []
+        raw_cases: list[TestCase] = []
         if list_result.returncode != 0:
             self.workspace.write_json(
                 self.workspace.testcases_dir / "provided_cases_error.json",
@@ -250,7 +278,7 @@ class AutomaticGC:
             )
             if case_result.returncode != 0:
                 continue
-            provided_cases.append(
+            raw_cases.append(
                 TestCase(
                     name=group_name,
                     input_text=case_result.stdout,
@@ -259,6 +287,8 @@ class AutomaticGC:
                 )
             )
 
+        provided_cases, selection = self._filter_testcases_for_active_targets(raw_cases)
+        self.workspace.write_json(selection_path, selection)
         self.workspace.write_json(
             self.workspace.testcases_dir / "provided_cases.json",
             [case.to_dict() for case in provided_cases],
@@ -267,19 +297,59 @@ class AutomaticGC:
 
     def _load_provided_cases_locally(self, data_path: Path) -> list[TestCase]:
         cases, encoding = parse_grouped_test_data(data_path)
+        provided_cases, selection = self._filter_testcases_for_active_targets(cases)
         self.workspace.write_json(
             self.workspace.testcases_dir / "provided_cases_local_parse.json",
             {
                 "encoding": encoding,
-                "count": len(cases),
-                "cases": [case.to_dict() for case in cases],
+                "raw_count": len(cases),
+                "selected_count": len(provided_cases),
+                "selection": selection,
+                "cases": [case.to_dict() for case in provided_cases],
             },
         )
         self.workspace.write_json(
-            self.workspace.testcases_dir / "provided_cases.json",
-            [case.to_dict() for case in cases],
+            self.workspace.testcases_dir / "provided_cases_selection.json",
+            selection,
         )
-        return cases
+        self.workspace.write_json(
+            self.workspace.testcases_dir / "provided_cases.json",
+            [case.to_dict() for case in provided_cases],
+        )
+        return provided_cases
+
+    def _filter_testcases_for_active_targets(
+        self,
+        cases: list[TestCase],
+    ) -> tuple[list[TestCase], dict[str, Any]]:
+        requested_prefixes = self.request.testcase_prefixes()
+        normalized_prefixes = [prefix.lower() for prefix in requested_prefixes if prefix.strip()]
+
+        matched_cases = [
+            case for case in cases if self._matches_requested_prefix(case.name, normalized_prefixes)
+        ]
+        use_filtered_selection = bool(normalized_prefixes and matched_cases)
+        selected_cases = matched_cases if use_filtered_selection else cases
+        selected_case_names = [case.name for case in selected_cases]
+        skipped_case_names = [
+            case.name for case in cases if case.name not in set(selected_case_names)
+        ]
+
+        return selected_cases, {
+            "requested_prefixes": requested_prefixes,
+            "raw_count": len(cases),
+            "selected_count": len(selected_cases),
+            "used_filtered_selection": use_filtered_selection,
+            "selected_case_names": selected_case_names,
+            "skipped_case_names": skipped_case_names,
+        }
+
+    def _matches_requested_prefix(self, case_name: str, prefixes: list[str]) -> bool:
+        normalized_name = case_name.strip().strip("[]").lower()
+        return any(
+            normalized_name == prefix or normalized_name.startswith(f"{prefix}-")
+            for prefix in prefixes
+        )
 
     def _generate_cases_with_codex(self) -> list[TestCase]:
         if self.request.generated_cases <= 0:
@@ -350,7 +420,7 @@ class AutomaticGC:
         demo_path = self.workspace.input_dir / self.request.demo_exe.name
         for testcase in selected_cases:
             demo_result = run_command(
-                [str(demo_path)],
+                self.request.demo_command(demo_path),
                 cwd=self.workspace.root,
                 input_text=testcase.input_text,
                 timeout_sec=self.tools.run_timeout_sec,
@@ -364,6 +434,7 @@ class AutomaticGC:
                     "demo_stderr": demo_result.stderr,
                     "returncode": demo_result.returncode,
                     "timed_out": demo_result.timed_out,
+                    "demo_args": list(self.request.demo_args),
                 }
             )
 
@@ -495,7 +566,7 @@ class AutomaticGC:
             input_path.write_text(testcase.input_text, encoding="utf-8")
 
             demo_result = self._run_binary_command(
-                [str(self.workspace.input_dir / self.request.demo_exe.name)],
+                self.request.demo_command(self.workspace.input_dir / self.request.demo_exe.name),
                 cwd=case_dir,
                 input_text=testcase.input_text,
                 timeout_sec=self.tools.run_timeout_sec,
@@ -682,13 +753,58 @@ class AutomaticGC:
             return feedback
 
         for failure in evaluation.failures[:5]:
-            feedback.append(
-                f"Case {failure['case_name']} failed: {failure['reason']}. "
-                f"Compare output:\n{failure['compare_stdout']}"
-            )
+            feedback.append(self._summarize_failure_for_feedback(failure))
         for violation in constraint_report.get("hard_violations", []):
             feedback.append(f"Hard constraint violation: {violation}")
         return feedback or ["Improve overall robustness. Previous attempt still did not pass."]
+
+    def _summarize_failure_for_feedback(self, failure: dict[str, Any]) -> str:
+        parts = [f"Case {failure['case_name']} failed: {failure['reason']}." ]
+
+        compare_hint = self._extract_compare_hint(failure.get("compare_stdout", ""))
+        if compare_hint:
+            parts.append(f"Compare hint: {compare_hint}.")
+
+        expected_preview = self._read_output_preview(failure.get("expected_file", ""))
+        if expected_preview:
+            parts.append(f"Expected preview: {expected_preview}")
+
+        actual_preview = self._read_output_preview(failure.get("actual_file", ""))
+        if actual_preview:
+            parts.append(f"Actual preview: {actual_preview}")
+
+        compare_stderr = failure.get("compare_stderr", "").strip()
+        if compare_stderr:
+            parts.append(f"Compare stderr: {compare_stderr[:240]}")
+
+        return " ".join(parts)
+
+    def _extract_compare_hint(self, compare_stdout: str) -> str:
+        for line in compare_stdout.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("第[") or stripped.startswith("在指定检查条件下"):
+                return stripped
+        return ""
+
+    def _read_output_preview(self, file_path: str) -> str:
+        if not file_path:
+            return ""
+
+        path = Path(file_path)
+        if not path.exists() or path.is_dir():
+            return ""
+
+        try:
+            text, _ = read_text_best_effort(path)
+        except OSError:
+            return ""
+
+        preview_lines: list[str] = []
+        for line in text.splitlines()[:3]:
+            preview_lines.append(line if line else "<EMPTY>")
+
+        preview = " | ".join(preview_lines).strip()
+        return preview[:240]
 
     def _publish_final(self, source_dir: Path, files: dict[str, str]) -> None:
         for filename, content in files.items():
@@ -748,3 +864,12 @@ class AutomaticGC:
             "stderr_text": stderr_bytes.decode(encoding, errors="replace"),
             "timed_out": False,
         }
+
+
+
+
+
+
+
+
+

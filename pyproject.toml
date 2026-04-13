@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "automatic-gc"
+name = "auto_fuck_sj"
 version = "0.1.0"
 description = "Coursework C++ solving orchestrator with Codex and local Windows toolchain"
 readme = "README.md"
@@ -17,4 +17,5 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-automatic_gc = ["prompts/*.md"]
+auto_fuck_sj = ["prompts/*.md"]
+

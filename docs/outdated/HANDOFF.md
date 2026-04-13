@@ -52,10 +52,10 @@ Read these first:
 1. `需求.md`
 2. `方案.md`
 3. `README.md`
-4. `src/automatic_gc/cli.py`
-5. `src/automatic_gc/orchestrator.py`
-6. `src/automatic_gc/codex_adapter.py`
-7. `src/automatic_gc/constraints.py`
+4. `src/auto_fuck_sj/cli.py`
+5. `src/auto_fuck_sj/orchestrator.py`
+6. `src/auto_fuck_sj/codex_adapter.py`
+7. `src/auto_fuck_sj/constraints.py`
 
 For the latest validated sample run, also read:
 
@@ -128,8 +128,13 @@ The user also clarified:
 ## Suggested Prompt For A New Codex Window
 
 ```text
-Read HANDOFF.md first, then read 需求.md, 方案.md, README.md, src/automatic_gc/cli.py, and src/automatic_gc/orchestrator.py.
+Read HANDOFF.md first, then read 需求.md, 方案.md, README.md, src/auto_fuck_sj/cli.py, and src/auto_fuck_sj/orchestrator.py.
 This repo is a Windows-local coursework C++ solving orchestrator MVP.
 Windows validation has now been done for `5-b15.cpp`, including real execution of `get_input_data.exe`, `demo.exe`, `txt_compare.exe`, and `codex exec --output-schema`.
 Continue from there by generalizing beyond `5-b15`, improving PDF extraction, and tightening constraint handling.
 ```
+
+
+
+
+

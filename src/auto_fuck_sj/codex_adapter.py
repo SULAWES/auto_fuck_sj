@@ -5,20 +5,23 @@ from importlib import resources
 from pathlib import Path
 from string import Template
 
+from .ai_adapter import AIAdapter
 from .models import ToolConfig
 from .subprocess_utils import run_command
 from .workspace import Workspace
 
 
-class CodexAdapter:
+class CodexAdapter(AIAdapter):
+    """Codex CLI 适配器。"""
+    
     def __init__(self, tools: ToolConfig, workspace: Workspace) -> None:
-        self.tools = tools
-        self.workspace = workspace
-        self.agent_log_dir = workspace.log_dir("agent")
+        super().__init__(tools, workspace)
+        self.tools = tools  # 类型标注为 ToolConfig
+        self.workspace = workspace  # 类型标注为 Workspace
 
     def render_prompt(self, prompt_name: str, **values: str) -> str:
         template_text = (
-            resources.files("automatic_gc")
+            resources.files("auto_fuck_sj")
             .joinpath("prompts")
             .joinpath(f"{prompt_name}.md")
             .read_text(encoding="utf-8")

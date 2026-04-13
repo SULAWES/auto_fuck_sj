@@ -1,0 +1,6 @@
+cout << "�������" << (i + 1) << "��" << endl;
+cout << "��д : " << upperCount << endl;
+cout << "Сд : " << lowerCount << endl;
+cout << "���� : " << digitCount << endl;
+cout << "�ո� : " << spaceCount << endl;
+cout << "���� : " << otherCount << endl;

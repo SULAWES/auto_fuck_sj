@@ -12,11 +12,13 @@ class SubmissionTarget:
 
 @dataclass(slots=True)
 class ToolConfig:
+    ai_backend: str = "codex"  # 可选: codex, kimi
     codex_bin: str = "codex"
     gpp_bin: str = "g++"
     txt_compare_bin: str = "txt_compare.exe"
     get_input_data_bin: str = "get_input_data.exe"
     codex_model: str | None = None
+    kimi_model: str | None = None  # Kimi 模型名称，如 kimi-k2-0711-preview
     compile_timeout_sec: int = 30
     run_timeout_sec: int = 10
     compare_timeout_sec: int = 10
@@ -27,6 +29,7 @@ class ToolConfig:
 class RunRequest:
     problem_file: Path
     demo_exe: Path
+    demo_args: list[str] = field(default_factory=list)
     data_file: Path | None = None
     workspace_root: Path = Path("workspaces")
     submission_targets: list[SubmissionTarget] = field(
@@ -43,6 +46,24 @@ class RunRequest:
         if self.entry_cpp:
             return self.entry_cpp
         return self.submission_targets[0].filename
+
+    def testcase_prefixes(self) -> list[str]:
+        prefixes: list[str] = []
+        for target in self.submission_targets:
+            stem = Path(target.filename).stem.strip()
+            if stem:
+                prefixes.append(stem)
+        return prefixes
+
+    def demo_command(self, demo_path: Path | None = None) -> list[str]:
+        resolved_demo = demo_path or self.demo_exe
+        return [str(resolved_demo), *self.demo_args]
+
+    def job_label(self) -> str:
+        label = self.normalized_entry_cpp()
+        if self.demo_args:
+            label = f"{label} {' '.join(self.demo_args)}"
+        return label
 
 
 @dataclass(slots=True)

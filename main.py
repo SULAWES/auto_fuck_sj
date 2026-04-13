@@ -5,8 +5,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from automatic_gc.cli import main
+from auto_fuck_sj.cli import main
 
 
 if __name__ == "__main__":
     main()
+
