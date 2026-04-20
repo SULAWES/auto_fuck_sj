@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 workspaces/
 test/
+workspaces_skill_*/

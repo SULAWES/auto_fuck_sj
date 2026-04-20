@@ -1,0 +1,4 @@
+interface:
+  display_name: "auto_fuck_sj"
+  short_description: "Solve coursework-style Windows C++ homework"
+  default_prompt: "Use $auto-fuck-sj to solve a coursework-style C++ problem from a PDF and demo.exe."
