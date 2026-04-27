@@ -33,6 +33,17 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def load_cases_payload(path: Path) -> list[dict[str, Any]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        cases = payload.get("cases", [])
+        if isinstance(cases, list):
+            return cases
+    if isinstance(payload, list):
+        return payload
+    raise ValueError(f"Unsupported cases payload in {path}")
+
+
 def run_text_command(
     command: list[str],
     *,

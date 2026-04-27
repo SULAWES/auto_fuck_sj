@@ -13,7 +13,7 @@ def matches_prefix(case_name: str, prefixes: list[str]) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Parse grouped coursework testcase data.")
+    parser = argparse.ArgumentParser(description="Parse grouped coursework testcase data with a text parser fallback.")
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--prefix", action="append", default=[])

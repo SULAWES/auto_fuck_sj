@@ -24,7 +24,7 @@ Recommended conventions:
 - `extracted/`
   `problem_text.txt`, `problem_context.md`, and extraction metadata.
 - `testcases/`
-  Provided cases, generated cases, filtered selections, and demo observations.
+  Provided cases, generated cases, filtered selections, testcase bundle metadata, and demo observations.
 - `candidates/attempt_XX/`
   Candidate `.cpp` files and any generation notes.
 - `outputs/attempt_XX/`

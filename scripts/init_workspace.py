@@ -36,6 +36,7 @@ def main() -> None:
     parser.add_argument("--pre-constraint-file", action="append", default=[])
     parser.add_argument("--demo")
     parser.add_argument("--data")
+    parser.add_argument("--get-input-data")
     parser.add_argument("--demo-arg", action="append", default=[])
     parser.add_argument("--cpp-name", action="append", default=[])
     args = parser.parse_args()
@@ -46,6 +47,7 @@ def main() -> None:
         "pre_constraint_files": list(args.pre_constraint_file),
         "demo": args.demo,
         "data": args.data,
+        "get_input_data": args.get_input_data,
         "demo_args": list(args.demo_arg),
         "cpp_names": list(args.cpp_name),
         "workspace": str(workspace),

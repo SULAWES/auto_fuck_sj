@@ -22,6 +22,7 @@ Treat explicit user-provided constraints that appear before the PDF as hard requ
    Optional but preferred:
    - pre-PDF constraint text or files
    - grouped testcase data file
+   - `get_input_data.exe` for official grouped data extraction
    - expected source filenames and extensions such as `5-b16-1.c` or `5-b16-2.cpp`
    - extra demo arguments such as `--sub1`
 
@@ -33,12 +34,17 @@ Treat explicit user-provided constraints that appear before the PDF as hard requ
 3. Extract the problem statement.
    - Use `scripts/extract_problem.py` to copy the original file and produce `problem_context.md`.
    - If the user provides constraint text or files before the PDF, include them with `--pre-constraint-file` and treat them as the highest-priority specification layer.
-   - If PDF extraction fails, continue with the copied file and note the extraction gap explicitly.
+   - This skill does not depend on external PDF-to-text tools such as `pdftotext`.
+   - For PDFs, first try the local PDF-reading path built into the agent runtime.
+   - If PDF extraction still fails, keep the copied PDF as the source artifact and rely on pre-PDF constraints, any supplied text companion files, official testcases, and `demo.exe` behavior.
+   - If the user has a plain text or markdown transcript of the statement, include it with `--problem-text-file`.
    - Read [references/windows-encoding.md](references/windows-encoding.md) when Chinese console output or encoding drift is relevant.
 
 4. Load provided testcases before inventing new ones.
-   - If the user gives a grouped testcase file, parse it with `scripts/parse_grouped_cases.py`.
+   - If the user gives a grouped testcase file and `get_input_data.exe`, build the testcase bundle with `scripts/build_testcases.py` and prefer the exe-based extraction path.
+   - If the grouped testcase file exists but `get_input_data.exe` is unavailable, fall back to `scripts/parse_grouped_cases.py`.
    - If there are subproblem prefixes such as `5-b16`, `sub1`, or filename stems that clearly scope the task, filter the provided cases to the active target.
+   - If there is no grouped testcase file, or the official bundle is too small, create `testcases/generated_cases.json` in-thread and merge it into the testcase bundle as supplemental coverage.
    - Only create extra cases after you have consumed the provided ones.
 
 5. Observe the demo program early.
@@ -78,7 +84,7 @@ Treat explicit user-provided constraints that appear before the PDF as hard requ
    - Prefer `-finput-charset=UTF-8 -fexec-charset=GBK` on Windows while evaluating UTF-8 working files.
    - Compare candidate output against `demo.exe` with `txt_compare.exe` when available.
    - Store per-case `input.txt`, `expected.txt`, `actual.txt`, and compare logs in the workspace.
-   - Run dependent stages sequentially: testcase parsing before demo observation, and evaluation before failure summarization.
+   - Run dependent stages sequentially: testcase bundle construction before demo observation, and evaluation before failure summarization.
 
 9. Feed back only compact failures.
    - Use `scripts/summarize_failures.py` to convert evaluation output into compact feedback items.
@@ -102,9 +108,11 @@ Treat explicit user-provided constraints that appear before the PDF as hard requ
 - `scripts/init_workspace.py`
   Create a numbered workspace with the standard folder layout and a run manifest.
 - `scripts/extract_problem.py`
-  Copy the source statement into the workspace and extract best-effort text into `problem_context.md`.
+  Copy the source statement into the workspace and build `problem_context.md` using the local PDF-reading path when available, without requiring external PDF-to-text tools.
+- `scripts/build_testcases.py`
+  Build the testcase bundle by extracting official grouped data with `get_input_data.exe` when available, then merge supplemental or generated cases.
 - `scripts/parse_grouped_cases.py`
-  Parse `[group]`-style testcase files into JSON cases.
+  Parse `[group]`-style testcase files into JSON cases as a fallback when `get_input_data.exe` is unavailable.
 - `scripts/observe_demo.py`
   Run `demo.exe` on representative cases and save observable behavior for prompt grounding.
 - `scripts/check_constraints.py`

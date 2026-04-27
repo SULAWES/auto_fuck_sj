@@ -8,6 +8,7 @@ Expected inputs for a typical run:
 - problem statement file
 - `demo.exe`
 - optional grouped testcase file
+- optional `get_input_data.exe`
 - optional demo arguments such as `--sub1`
 - optional expected source filenames and extensions
 
@@ -16,8 +17,8 @@ Expected inputs for a typical run:
 1. Create a numbered workspace.
 2. Copy the original inputs into `input/`.
 3. Copy any pre-PDF constraint files into `input/` and treat them as the highest-priority specification layer.
-4. Extract best-effort problem text and write `extracted/problem_context.md`.
-5. Parse provided grouped testcases into `testcases/provided_cases.json`.
+4. Build `extracted/problem_context.md` from the copied source file, pre-PDF constraints, and any optional text companion files.
+5. Build `testcases/provided_cases.json`, preferably with `get_input_data.exe`.
 6. Observe `demo.exe` on representative cases and save `testcases/demo_observations.json`.
 7. Generate or repair candidate source files in `candidates/attempt_XX/`.
 8. Run constraint checks.
@@ -30,13 +31,16 @@ Expected inputs for a typical run:
 ## Decision rules
 
 - Trust explicit pre-PDF constraints more than the PDF when they disagree.
+- Do not depend on external PDF-to-text tools. Prefer the local PDF-reading path built into the agent runtime, and only fall back to treating the PDF as a raw artifact if extraction still fails.
 - Default to not using STL unless the statement explicitly allows it.
 - Trust `demo.exe` more than extracted PDF text when they disagree on visible output.
-- Trust the original grouped testcase file more than invented cases when they disagree on input shape.
+- Trust the official grouped testcase data more than invented cases when they disagree on input shape.
+- Prefer `get_input_data.exe` over text parsing when it is available, because it reflects the teacher-provided extraction path.
 - If the task requires a demo flag, carry it through every demo invocation.
 - Keep the editable working copy in UTF-8 unless a tool absolutely requires another encoding.
 - Convert to the required submission encoding only at the final export step.
 - If the statement specifies an exact output filename such as `5-b16-1.c`, preserve that exact filename and extension in the final artifact.
+- If there is no grouped testcase file, or the official data only covers a small subset, add `generated_cases.json` and merge it into the evaluation bundle.
 - If there are no cases, a compile-only pass is acceptable, but state that runtime coverage is missing.
 
 ## Output expectations
