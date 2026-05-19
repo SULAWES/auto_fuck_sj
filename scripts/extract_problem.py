@@ -47,7 +47,12 @@ def find_bundled_pdfjs_dir() -> Path | None:
     return None
 
 
-def extract_pdf_text_with_pdfjs(problem_path: Path, extracted_dir: Path, timeout_sec: int) -> tuple[str, str]:
+def extract_pdf_text_with_pdfjs(
+    problem_path: Path,
+    extracted_dir: Path,
+    timeout_sec: int,
+    output_name: str = "problem_text.txt",
+) -> tuple[str, str]:
     node_executable = find_bundled_node_executable()
     pdfjs_dir = find_bundled_pdfjs_dir()
     if node_executable is None or pdfjs_dir is None:
@@ -58,12 +63,16 @@ def extract_pdf_text_with_pdfjs(problem_path: Path, extracted_dir: Path, timeout
     try:
         with tempfile.NamedTemporaryFile("w", suffix=".mjs", encoding="utf-8", delete=False, dir=extracted_dir) as script_file:
             script_path = Path(script_file.name)
-            output_path = extracted_dir / "problem_text.txt"
+            output_path = extracted_dir / output_name
             script_file.write(
                 "\n".join(
                     [
                         "import fs from 'fs';",
                         "import { pathToFileURL } from 'url';",
+                        "",
+                        "globalThis.DOMMatrix = globalThis.DOMMatrix || class {};",
+                        "globalThis.ImageData = globalThis.ImageData || class {};",
+                        "globalThis.Path2D = globalThis.Path2D || class {};",
                         "",
                         f"const pdfjsEntry = {json.dumps(str((pdfjs_dir / 'legacy' / 'build' / 'pdf.mjs').resolve()).replace('\\\\', '/'))};",
                         "const pdfjs = await import(pathToFileURL(pdfjsEntry).href);",
@@ -108,9 +117,14 @@ def extract_pdf_text_with_pdfjs(problem_path: Path, extracted_dir: Path, timeout
             script_path.unlink(missing_ok=True)
 
 
-def extract_problem_text(problem_path: Path, extracted_dir: Path, timeout_sec: int) -> tuple[str, str]:
+def extract_problem_text(
+    problem_path: Path,
+    extracted_dir: Path,
+    timeout_sec: int,
+    output_name: str = "problem_text.txt",
+) -> tuple[str, str]:
     suffix = problem_path.suffix.lower()
-    if suffix in {".txt", ".md"}:
+    if suffix in {".txt", ".md", ".c", ".cpp", ".h", ".hpp"}:
         text, encoding = read_text_best_effort(problem_path)
         return text, f"Loaded text directly with {encoding}."
 
@@ -124,7 +138,7 @@ def extract_problem_text(problem_path: Path, extracted_dir: Path, timeout_sec: i
     if text:
         return text, note
 
-    text, note = extract_pdf_text_with_pdfjs(problem_path, extracted_dir, timeout_sec)
+    text, note = extract_pdf_text_with_pdfjs(problem_path, extracted_dir, timeout_sec, output_name)
     attempts.append(note)
     if text:
         return text, note
@@ -140,6 +154,7 @@ def main() -> None:
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--pre-constraint-file", type=Path, action="append", default=[])
     parser.add_argument("--problem-text-file", type=Path, action="append", default=[])
+    parser.add_argument("--reference-assignment-file", type=Path, action="append", default=[])
     parser.add_argument("--demo-name")
     parser.add_argument("--demo-arg", action="append", default=[])
     parser.add_argument("--cpp-name", action="append", default=[])
@@ -189,6 +204,28 @@ def main() -> None:
             ]
         )
 
+    reference_sections: list[str] = []
+    copied_reference_files: list[str] = []
+    for index, reference_path in enumerate(args.reference_assignment_file, start=1):
+        copied_reference = input_dir / reference_path.name
+        shutil.copy2(reference_path, copied_reference)
+        copied_reference_files.append(str(copied_reference))
+        reference_text, reference_note = extract_problem_text(
+            copied_reference,
+            extracted_dir,
+            args.timeout_sec,
+            f"reference_{index:02d}_text.txt",
+        )
+        reference_sections.extend(
+            [
+                f"### {copied_reference.name}",
+                reference_note,
+                "",
+                reference_text or "Reference text unavailable. Use the copied artifact only for manual review.",
+                "",
+            ]
+        )
+
     extracted_text, notes = extract_problem_text(copied_problem, extracted_dir, args.timeout_sec)
     demo_text = args.demo_name or "(unknown)"
     demo_args_text = " ".join(args.demo_arg) if args.demo_arg else "(none)"
@@ -211,6 +248,10 @@ def main() -> None:
                 else ["No separate pre-PDF constraint files were provided."]
             ),
             "",
+            "## Extracted Problem Text",
+            "",
+            extracted_text or "Extraction unavailable. Read the copied problem file directly if needed.",
+            "",
             "## Supplemental Statement Text",
             "",
             *(
@@ -219,13 +260,17 @@ def main() -> None:
                 else ["No separate problem text companion files were provided."]
             ),
             "",
+            "## Reference Assignments",
+            "",
+            *(
+                reference_sections
+                if reference_sections
+                else ["No optional previous-assignment reference files were provided."]
+            ),
+            "",
             "## Extraction Notes",
             "",
             notes or "No extraction notes.",
-            "",
-            "## Extracted Problem Text",
-            "",
-            extracted_text or "Extraction unavailable. Read the copied problem file directly if needed.",
         ]
     )
 
@@ -239,6 +284,8 @@ def main() -> None:
             "copied_pre_constraint_files": copied_constraint_files,
             "problem_text_files": [str(path.resolve()) for path in args.problem_text_file],
             "copied_problem_text_files": copied_problem_text_files,
+            "reference_assignment_files": [str(path.resolve()) for path in args.reference_assignment_file],
+            "copied_reference_assignment_files": copied_reference_files,
             "notes": notes,
             "demo_name": demo_text,
             "demo_args": list(args.demo_arg),

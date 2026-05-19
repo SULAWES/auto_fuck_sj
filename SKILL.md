@@ -23,6 +23,7 @@ Treat explicit user-provided constraints that appear before the PDF as hard requ
    - pre-PDF constraint text or files
    - grouped testcase data file
    - `get_input_data.exe` for official grouped data extraction
+   - previous-assignment reference files for ambiguous format, error handling, or allowed-knowledge checks
    - expected source filenames and extensions such as `5-b16-1.c` or `5-b16-2.cpp`
    - extra demo arguments such as `--sub1`
 
@@ -36,8 +37,11 @@ Treat explicit user-provided constraints that appear before the PDF as hard requ
    - If the user provides constraint text or files before the PDF, include them with `--pre-constraint-file` and treat them as the highest-priority specification layer.
    - This skill does not depend on external PDF-to-text tools such as `pdftotext`.
    - For PDFs, first try the local PDF-reading path built into the agent runtime.
+   - Treat extracted PDF text as the primary problem statement after any explicit pre-PDF constraints.
    - If PDF extraction still fails, keep the copied PDF as the source artifact and rely on pre-PDF constraints, any supplied text companion files, official testcases, and `demo.exe` behavior.
    - If the user has a plain text or markdown transcript of the statement, include it with `--problem-text-file`.
+   - If the user provides previous-assignment reference files, include them with `--reference-assignment-file`; use them only to understand ambiguous input/output conventions, error handling, PDF extraction correctness, and likely allowed knowledge.
+   - Never copy a previous-assignment solution. The current PDF and explicit constraints remain the source of truth.
    - Read [references/windows-encoding.md](references/windows-encoding.md) when Chinese console output or encoding drift is relevant.
 
 4. Load provided testcases before inventing new ones.
@@ -56,6 +60,9 @@ Treat explicit user-provided constraints that appear before the PDF as hard requ
 6. Generate or repair candidate code in-thread.
    - Keep the code looking like solid coursework, not library or production code.
    - Treat the statement as the source of truth. When the statement imposes a coding restriction, follow it over any default habit.
+   - Read the allowed-knowledge whitelist near the start of the PDF before choosing constructs.
+   - Default to using only the allowed course topics: comparison/logical/conditional operators, branches, loops, functions, and arrays unless the PDF allows more.
+   - Treat pointers, references, structs, and classes as advanced for this course context unless the PDF whitelist allows them.
    - If the statement explicitly gives the target source filename or extension, preserve it exactly.
    - Default to not using STL unless the statement explicitly allows it.
    - Prefer direct arrays, loops, and straightforward control flow over generic abstractions.
@@ -75,6 +82,7 @@ Treat explicit user-provided constraints that appear before the PDF as hard requ
 7. Check constraints before spending time on style.
    - Use `scripts/check_constraints.py` on the generated files.
    - Read [references/constraints.md](references/constraints.md) when the statement bans STL, recursion, classes, or templates.
+   - Treat PDF knowledge bans and whitelist-derived bans as hard constraints.
    - Read [references/style.md](references/style.md) when preparing the final candidate.
    - Treat hard violations as blockers. Treat style warnings as post-pass cleanup only.
 

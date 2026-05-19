@@ -20,9 +20,9 @@ workspaces/000001/
 Recommended conventions:
 
 - `input/`
-  Original copied inputs such as the problem file, `demo.exe`, and grouped testcase data.
+  Original copied inputs such as the problem file, optional previous-assignment references, `demo.exe`, and grouped testcase data.
 - `extracted/`
-  `problem_text.txt`, `problem_context.md`, and extraction metadata.
+  `problem_text.txt`, optional `reference_XX_text.txt`, `problem_context.md`, and extraction metadata.
 - `testcases/`
   Provided cases, generated cases, filtered selections, testcase bundle metadata, and demo observations.
 - `candidates/attempt_XX/`

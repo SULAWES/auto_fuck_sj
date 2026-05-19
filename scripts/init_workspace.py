@@ -34,6 +34,7 @@ def main() -> None:
     parser.add_argument("--workspace-root", type=Path, required=True)
     parser.add_argument("--problem")
     parser.add_argument("--pre-constraint-file", action="append", default=[])
+    parser.add_argument("--reference-assignment-file", action="append", default=[])
     parser.add_argument("--demo")
     parser.add_argument("--data")
     parser.add_argument("--get-input-data")
@@ -45,6 +46,7 @@ def main() -> None:
     manifest = {
         "problem": args.problem,
         "pre_constraint_files": list(args.pre_constraint_file),
+        "reference_assignment_files": list(args.reference_assignment_file),
         "demo": args.demo,
         "data": args.data,
         "get_input_data": args.get_input_data,

@@ -9,6 +9,7 @@ Expected inputs for a typical run:
 - `demo.exe`
 - optional grouped testcase file
 - optional `get_input_data.exe`
+- optional previous-assignment reference files
 - optional demo arguments such as `--sub1`
 - optional expected source filenames and extensions
 
@@ -17,7 +18,7 @@ Expected inputs for a typical run:
 1. Create a numbered workspace.
 2. Copy the original inputs into `input/`.
 3. Copy any pre-PDF constraint files into `input/` and treat them as the highest-priority specification layer.
-4. Build `extracted/problem_context.md` from the copied source file, pre-PDF constraints, and any optional text companion files.
+4. Build `extracted/problem_context.md` from the copied source file, pre-PDF constraints, extracted PDF text, optional text companion files, and optional previous-assignment references.
 5. Build `testcases/provided_cases.json`, preferably with `get_input_data.exe`.
 6. Observe `demo.exe` on representative cases and save `testcases/demo_observations.json`.
 7. Generate or repair candidate source files in `candidates/attempt_XX/`.
@@ -32,7 +33,10 @@ Expected inputs for a typical run:
 
 - Trust explicit pre-PDF constraints more than the PDF when they disagree.
 - Do not depend on external PDF-to-text tools. Prefer the local PDF-reading path built into the agent runtime, and only fall back to treating the PDF as a raw artifact if extraction still fails.
+- Treat extracted PDF text as the primary written statement after explicit pre-PDF constraints.
+- Use previous-assignment references only as a comparison group for ambiguous formatting, error handling, extraction sanity checks, and allowed-knowledge expectations. Never copy their solutions.
 - Default to not using STL unless the statement explicitly allows it.
+- For allowed knowledge, start from the whitelist near the front of the PDF. If no whitelist is clear, stay conservative with pointers, references, structs, and classes.
 - Trust `demo.exe` more than extracted PDF text when they disagree on visible output.
 - Trust the official grouped testcase data more than invented cases when they disagree on input shape.
 - Prefer `get_input_data.exe` over text parsing when it is available, because it reflects the teacher-provided extraction path.
